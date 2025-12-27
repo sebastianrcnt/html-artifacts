@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>인수분해 시각화</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+KR:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'monospace'],
+                        sans: ['Noto Sans KR', 'sans-serif'],
+                    },
+                    colors: {
+                        ink: '#1a1a1a',
+                        paper: '#faf9f7',
+                        accent: '#e85d04',
+                        muted: '#6b6b6b',
+                        grid: '#2d2d2d',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            background: linear-gradient(180deg, #faf9f7 0%, #f0eeeb 100%);
+            min-height: 100vh;
+        }
+        
+        .input-field {
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid #1a1a1a;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+        
+        .input-field:focus {
+            border-color: #e85d04;
+        }
+        
+        .grid-cell {
+            aspect-ratio: 1;
+            background: #1a1a1a;
+            border-radius: 2px;
+            transition: all 0.15s ease;
+        }
+        
+        .factor-card {
+            background: white;
+            border: 1px solid rgba(0,0,0,0.06);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            transition: all 0.2s ease;
+        }
+        
+        .factor-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            transform: translateY(-2px);
+        }
+        
+        .ratio-badge {
+            font-variant-numeric: tabular-nums;
+        }
+        
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .animate-in {
+            animation: fadeUp 0.3s ease forwards;
+        }
+        
+        .range-track {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 2px;
+            background: #d1d1d1;
+            border-radius: 1px;
+            outline: none;
+        }
+        
+        .range-track::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #1a1a1a;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+        
+        .range-track::-webkit-slider-thumb:hover {
+            background: #e85d04;
+        }
+        
+        .range-track::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: #1a1a1a;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="font-sans text-ink antialiased">
+    <div class="max-w-2xl mx-auto px-5 py-10 md:py-16">
+        <!-- Header -->
+        <header class="mb-10">
+            <h1 class="font-mono text-2xl md:text-3xl font-bold tracking-tight mb-2">인수분해</h1>
+            <p class="text-muted text-sm">숫자를 입력하면 모든 인수 조합을 시각화합니다</p>
+        </header>
+        
+        <!-- Input Section -->
+        <div class="mb-8 space-y-6">
+            <!-- Number Input -->
+            <div class="flex items-baseline gap-4">
+                <label class="text-sm text-muted whitespace-nowrap">숫자</label>
+                <input 
+                    type="number" 
+                    id="numberInput" 
+                    value="40"
+                    min="1"
+                    max="10000"
+                    class="input-field font-mono text-3xl md:text-4xl font-bold w-full py-2"
+                    placeholder="40"
+                >
+            </div>
+            
+            <!-- Ratio Filter -->
+            <div class="flex items-center gap-4">
+                <label class="text-sm text-muted whitespace-nowrap">종횡비 제한</label>
+                <div class="flex-1 flex items-center gap-3">
+                    <span class="font-mono text-xs text-muted">1:1</span>
+                    <input 
+                        type="range" 
+                        id="ratioSlider" 
+                        min="1" 
+                        max="20" 
+                        value="5"
+                        class="range-track flex-1"
+                    >
+                    <span class="font-mono text-xs text-muted">1:20</span>
+                </div>
+                <span id="ratioDisplay" class="font-mono text-sm font-semibold bg-ink text-paper px-2 py-1 rounded">1:5</span>
+            </div>
+        </div>
+        
+        <!-- Results Count -->
+        <div id="resultsCount" class="text-sm text-muted mb-6 hidden">
+            <span id="countNumber" class="font-mono font-semibold text-ink">0</span>개의 조합
+        </div>
+        
+        <!-- Results Grid -->
+        <div id="results" class="space-y-4">
+            <!-- Factor cards will be inserted here -->
+        </div>
+        
+        <!-- Empty State -->
+        <div id="emptyState" class="text-center py-16 hidden">
+            <p class="text-muted">조건에 맞는 조합이 없습니다</p>
+        </div>
+    </div>
+    
+    <script>
+        const numberInput = document.getElementById('numberInput');
+        const ratioSlider = document.getElementById('ratioSlider');
+        const ratioDisplay = document.getElementById('ratioDisplay');
+        const resultsContainer = document.getElementById('results');
+        const resultsCount = document.getElementById('resultsCount');
+        const countNumber = document.getElementById('countNumber');
+        const emptyState = document.getElementById('emptyState');
+        
+        function getFactorPairs(n) {
+            const pairs = [];
+            const sqrt = Math.sqrt(n);
+            
+            for (let i = 1; i <= sqrt; i++) {
+                if (n % i === 0) {
+                    const a = i;
+                    const b = n / i;
+                    // 세로가 길게 (b >= a)
+                    pairs.push({ width: a, height: b });
+                }
+            }
+            
+            return pairs;
+        }
+        
+        function calculateRatio(width, height) {
+            // 항상 큰 수 / 작은 수로 비율 계산
+            const max = Math.max(width, height);
+            const min = Math.min(width, height);
+            return max / min;
+        }
+        
+        function filterByRatio(pairs, maxRatio) {
+            return pairs.filter(pair => {
+                const ratio = calculateRatio(pair.width, pair.height);
+                return ratio <= maxRatio;
+            });
+        }
+        
+        function sortByRatioClosestToOne(pairs) {
+            return pairs.sort((a, b) => {
+                const ratioA = calculateRatio(a.width, a.height);
+                const ratioB = calculateRatio(b.width, b.height);
+                return ratioA - ratioB;
+            });
+        }
+        
+        function createGridVisualization(width, height) {
+            // 최대 셀 크기 계산 (컨테이너에 맞게)
+            const maxGridWidth = 200;
+            const maxGridHeight = 280;
+            
+            const cellSize = Math.min(
+                Math.floor(maxGridWidth / width),
+                Math.floor(maxGridHeight / height),
+                24 // 최대 셀 크기
+            );
+            
+            const actualCellSize = Math.max(cellSize, 4); // 최소 셀 크기
+            const gap = actualCellSize >= 12 ? 2 : 1;
+            
+            const gridHtml = `
+                <div 
+                    class="grid" 
+                    style="
+                        display: grid;
+                        grid-template-columns: repeat(${width}, ${actualCellSize}px);
+                        grid-template-rows: repeat(${height}, ${actualCellSize}px);
+                        gap: ${gap}px;
+                    "
+                >
+                    ${Array(width * height).fill('<div class="grid-cell"></div>').join('')}
+                </div>
+            `;
+            
+            return gridHtml;
+        }
+        
+        function formatRatio(width, height) {
+            const ratio = calculateRatio(width, height);
+            if (ratio === 1) return '1:1';
+            return `1:${ratio.toFixed(ratio % 1 === 0 ? 0 : 1)}`;
+        }
+        
+        function render() {
+            const n = parseInt(numberInput.value) || 0;
+            const maxRatio = parseInt(ratioSlider.value);
+            
+            ratioDisplay.textContent = `1:${maxRatio}`;
+            
+            if (n <= 0 || n > 10000) {
+                resultsContainer.innerHTML = '';
+                resultsCount.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                emptyState.querySelector('p').textContent = n > 10000 ? '10000 이하의 숫자를 입력해주세요' : '유효한 숫자를 입력해주세요';
+                return;
+            }
+            
+            let pairs = getFactorPairs(n);
+            pairs = filterByRatio(pairs, maxRatio);
+            pairs = sortByRatioClosestToOne(pairs);
+            
+            if (pairs.length === 0) {
+                resultsContainer.innerHTML = '';
+                resultsCount.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                emptyState.querySelector('p').textContent = '조건에 맞는 조합이 없습니다';
+                return;
+            }
+            
+            emptyState.classList.add('hidden');
+            resultsCount.classList.remove('hidden');
+            countNumber.textContent = pairs.length;
+            
+            resultsContainer.innerHTML = pairs.map((pair, index) => `
+                <div class="factor-card rounded-xl p-5 animate-in" style="animation-delay: ${index * 50}ms">
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="flex-1">
+                            <div class="font-mono text-2xl font-bold mb-1">
+                                ${pair.width} × ${pair.height}
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="ratio-badge text-xs text-muted">
+                                    종횡비 ${formatRatio(pair.width, pair.height)}
+                                </span>
+                                ${pair.width === pair.height ? 
+                                    '<span class="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded-full font-medium">정사각형</span>' 
+                                    : ''
+                                }
+                            </div>
+                        </div>
+                        <div class="flex-shrink-0">
+                            ${createGridVisualization(pair.width, pair.height)}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // Event Listeners
+        numberInput.addEventListener('input', render);
+        ratioSlider.addEventListener('input', render);
+        
+        // Initial render
+        render();
+        
+        // Focus input on load
+        numberInput.focus();
+        numberInput.select();
+    </script>
+</body>
+</html>
